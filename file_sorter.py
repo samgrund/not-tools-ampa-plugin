@@ -1,4 +1,4 @@
-"""FITS Tree Browser plugin for AMPA.
+"""File Sorter plugin for AMPA.
 
 Recursively scans a user-selected folder for FITS files and presents them
 in a tree grouped first by the ``TCSTGT`` header entry (telescope target)
@@ -30,9 +30,9 @@ from ampa.core.apis import settings_api, ui_api
 from ampa.core.basemodule import BaseModule
 from ampa.core.logging import log
 
-__LOGMODULE__ = "FitsTreeBrowser"
+__LOGMODULE__ = "FileSorter"
 
-_SETTINGS_GROUP = "FitsTreeBrowser"
+_SETTINGS_GROUP = "FileSorter"
 _KEY_LAST_FOLDER = f"{_SETTINGS_GROUP}/last_folder"
 
 # Recognised FITS file suffixes (lower-case). gz-compressed variants are
@@ -177,42 +177,48 @@ def format_details(record: Dict[str, Any]) -> str:
 # Plugin
 # ======================================================================
 
-class FitsTreeBrowserPlugin(BaseModule):
-    """Plugins ▸ File Browsing ▸ FITS Tree Browser."""
+class FileSorterPlugin(BaseModule):
+    """NOT Toolkit ▸ File Sorter."""
 
     def __init__(self):
         super().__init__(
-            title="FITS Tree Browser",
-            category="Plugins",
-            section="File Browsing",
+            title="File Sorter",
+            category="NOT Toolkit",
         )
         settings_api.define_setting(
             group=_SETTINGS_GROUP,
             key="last_folder",
             default_value="",
             value_type=str,
-            description="Last folder scanned by the FITS Tree Browser.",
+            description="Last folder scanned by the File Sorter.",
         )
         self._scan_root: Optional[str] = None
         self._records: List[Dict[str, Any]] = []
-        self._headers: Dict[str, Any] = {}
 
     # -- lifecycle --------------------------------------------------------
 
-    def on_activated(self):
+    def show_gui(self):
+        """Create the window lazily, then show/raise/focus it.
+
+        Overridden because the base implementation resets
+        ``gui_widget`` to ``None`` after ``on_activated()`` returns,
+        which would discard a window built there.
+        """
         if self.gui_widget is None:
             self._build_window()
             last = settings_api.get_value(_KEY_LAST_FOLDER, "")
             if last and os.path.isdir(last):
                 self.folder_input.setText(last)
                 self._scan_root = last
-                self._start_scan()
+        self.gui_widget.show()
+        self.gui_widget.raise_()
+        self.gui_widget.activateWindow()
 
     # -- GUI creation -----------------------------------------------------
 
     def _build_window(self):
         window = QtWidgets.QWidget()
-        window.setWindowTitle("FITS Tree Browser")
+        window.setWindowTitle("File Sorter")
         layout = QtWidgets.QVBoxLayout(window)
 
         # Folder selection row
@@ -285,7 +291,7 @@ class FitsTreeBrowserPlugin(BaseModule):
         folder = self.folder_input.text().strip()
         if not folder or not os.path.isdir(folder):
             ui_api.show_error_dialog(
-                "FITS Tree Browser", "Please select a valid folder first.")
+                "File Sorter", "Please select a valid folder first.")
             return False
         self._scan_root = folder
         self.tree.clear()
@@ -331,7 +337,7 @@ class FitsTreeBrowserPlugin(BaseModule):
     def _on_scan_error(self, message):
         self.rescan_button.setEnabled(True)
         self.status_label.setText("Scan failed.")
-        ui_api.show_error_dialog("FITS Tree Browser",
+        ui_api.show_error_dialog("File Sorter",
                                  f"Scanning failed:\n{message}")
 
     def _on_scan_cancelled(self):
@@ -392,7 +398,7 @@ class FitsTreeBrowserPlugin(BaseModule):
         path = record["path"]
         if record["header"] is None:
             if not ui_api.confirm_dialog(
-                    "FITS Tree Browser",
+                    "File Sorter",
                     "This file could not be read during the scan.\n"
                     f"Try to open it anyway?\n\n{path}"):
                 return
@@ -401,4 +407,4 @@ class FitsTreeBrowserPlugin(BaseModule):
                 f"Loaded {os.path.basename(path)}", timeout=4000)
         else:
             ui_api.show_error_dialog(
-                "FITS Tree Browser", f"Could not load:\n{path}")
+                "File Sorter", f"Could not load:\n{path}")

@@ -9,7 +9,7 @@ one-click installation via AMPA's Plugin Browser.
 
 | File | Description |
 |------|-------------|
-| `fits_tree.py` | **FITS Tree Browser** — scan a folder recursively for FITS files and browse them grouped by `TCSTGT` (target) → `INSTRUME` (instrument). |
+| `file_sorter.py` | **File Sorter** — scan a folder recursively for FITS files and browse them grouped by `TCSTGT` (target) → `INSTRUME` (instrument). |
 
 ## Install
 
@@ -22,8 +22,8 @@ URLs** and add:
 https://github.com/samgrund/not-tools-ampa-plugin/raw/main/plugins.json
 ```
 
-The **FITS Tree Browser** plugin appears in the browser list — install it
-with the button, then restart AMPA when prompted.
+The **File Sorter** plugin appears in the browser list — install it with
+the button, then restart AMPA when prompted.
 
 ### Option B — Clone as a local plugin directory
 
@@ -36,10 +36,9 @@ Plugins → Local Plugin Directories** (e.g.
 `/home/you/not-tools-ampa-plugin`) and restart AMPA. Update with
 `git pull` + restart.
 
-## FITS Tree Browser usage
+## File Sorter usage
 
-1. **Plugins → File Browsing → FITS Tree Browser** opens the plugin
-   window.
+1. **NOT Toolkit → File Sorter** opens the plugin window.
 2. Pick a folder with **Browse…** — every FITS file below it
    (`.fits`, `.fit`, `.fts`, plus `.gz` variants, case-insensitive) is
    scanned in the background with a progress bar and cancel button.
@@ -70,11 +69,11 @@ and `PySide6`, which AMPA ships already.
 
 ## Development
 
-Edit `fits_tree.py`, restart AMPA (local-directory plugins are
+Edit `file_sorter.py`, restart AMPA (local-directory plugins are
 re-imported at every launch). When publishing:
 
 1. Commit the changed `.py` and bump `version` in `plugins.json`.
 2. Regenerate the `sha256:` checksum from the exact uploaded file
-   (`sha256sum fits_tree.py`) and update `download_url`/`download_size`
+   (`sha256sum file_sorter.py`) and update `download_url`/`download_size`
    — a stale checksum breaks remote installation.
 3. Push; users refresh (or restart AMPA) to pick up the update.
