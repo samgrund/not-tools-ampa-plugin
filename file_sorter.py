@@ -14,7 +14,9 @@ labels than the raw FITS keywords where a mapping exists (see
 ``_KEY_LABELS``). Double-click a row (or use **Load Selected**) to open
 the file in the AMPA viewer; select a range of rows and use **New
 Sequence…** (or the table's context menu) to create a session-only AMPA
-sequence from them.
+sequence from them. The search bar above the tabs filters every table
+across all columns (case-insensitive); tabs that hide rows get a ``*``
+appended to their name.
 
 Files missing headers land under placeholder tabs (``(no TARGET)`` /
 ``(no INSTRUME)``); files whose header cannot be read (corrupt,
@@ -460,6 +462,14 @@ class FileSorterPlugin(BaseModule):
         folder_row.addWidget(self.rescan_button)
         layout.addLayout(folder_row)
 
+        # Search bar above the tabs: filters every table at once.
+        self.search_input = QtWidgets.QLineEdit()
+        self.search_input.setPlaceholderText(
+            "Search all columns — filters the tables")
+        self.search_input.setClearButtonEnabled(True)
+        self.search_input.textChanged.connect(self._apply_search_filter)
+        layout.addWidget(self.search_input)
+
         # One tab per instrument; each tab is a table with one row per
         # file and that instrument's columns.
         self.tabs = QtWidgets.QTabWidget()
@@ -570,8 +580,11 @@ class FileSorterPlugin(BaseModule):
         groups = group_by_instrument(records)
         for instrument in sorted(groups, key=str.lower):
             table = self._build_table(instrument, groups[instrument])
-            self.tabs.addTab(table,
-                             f"{instrument} ({len(groups[instrument])})")
+            index = self.tabs.addTab(table, "")
+            table.setProperty("tabName", instrument)
+            self._refresh_tab_label(index)
+        # A search may already be active (e.g. after a rescan) - re-apply it.
+        self._apply_search_filter(self.search_input.text())
 
     def _build_table(self, instrument: str,
                     records: List[Dict[str, Any]]) -> QtWidgets.QTableWidget:
@@ -642,6 +655,49 @@ class FileSorterPlugin(BaseModule):
         table.itemDoubleClicked.connect(self._on_item_double_clicked)
         table.itemSelectionChanged.connect(self._update_action_buttons)
         return table
+
+    # -- search / filtering ---------------------------------------------
+
+    def _apply_search_filter(self, text: str):
+        """Filter every table to rows matching *text* across all columns.
+
+        The match is a case-insensitive substring over every visible
+        cell of a row. Tabs that hide rows get a ``*`` appended to
+        their name and show the visible count; an empty search shows
+        everything.
+        """
+        needle = text.strip().lower()
+        for index in range(self.tabs.count()):
+            table = self.tabs.widget(index)
+            if not isinstance(table, QtWidgets.QTableWidget):
+                continue
+            for row in range(table.rowCount()):
+                table.setRowHidden(
+                    row,
+                    bool(needle) and not self._row_matches(table, row, needle))
+            self._refresh_tab_label(index)
+
+    @staticmethod
+    def _row_matches(table: QtWidgets.QTableWidget, row: int,
+                     needle: str) -> bool:
+        """True when any cell of the row's visible columns matches."""
+        for column in range(table.columnCount()):
+            item = table.item(row, column)
+            if item is not None and needle in item.text().lower():
+                return True
+        return False
+
+    def _refresh_tab_label(self, index: int):
+        """Set a tab's text to ``NAME (visible)`` plus ``*`` when filtered."""
+        table = self.tabs.widget(index)
+        if not isinstance(table, QtWidgets.QTableWidget):
+            return
+        name = str(table.property("tabName") or "")
+        total = table.rowCount()
+        visible = sum(1 for row in range(total)
+                      if not table.isRowHidden(row))
+        star = "*" if visible < total else ""
+        self.tabs.setTabText(index, f"{name}{star} ({visible})")
 
     # -- selection / loading --------------------------------------------------
 

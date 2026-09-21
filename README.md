@@ -81,6 +81,11 @@ Plugins → Local Plugin Directories** (e.g.
    - Columns are sized to their content — filenames are never cut
      off; if the window is narrower than the table a horizontal
      scrollbar appears.
+   - The **search bar above the tabs** filters every table at once:
+     the (case-insensitive) text is matched against all columns of
+     every row. Tabs that hide rows get a `*` in their label
+     (`ALFOSC* (3)`) and show the visible count; an empty search
+     shows everything again.
 4. **Double-click a row** (or select it and press **Load Selected**)
    to open the file in the AMPA viewer. Unreadable files ask for
    confirmation first.

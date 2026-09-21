@@ -3,16 +3,16 @@
         {
             "id": "file-sorter",
             "name": "File Sorter",
-            "version": "0.6.3",
-            "description": "Recursively scans a folder for FITS files and groups them in tabs by instrument. Non-science files (IMAGECAT other than SCIENCE) and files without a TCSTGT target go to their own per-instrument CALIB tabs. Friendlier column labels (TARGET, IMAGETYPE, OBSMODE, FASU A/B, GRISM, FIBER). Shows TELALT (1 decimal) and AIRMASS (2 decimals) for every file. Select a range of rows to create a session-only AMPA sequence. Double-click a file to load it into the AMPA viewer.",
+            "version": "0.6.4",
+            "description": "Recursively scans a folder for FITS files and groups them in tabs by instrument. Non-science files (IMAGECAT other than SCIENCE) and files without a TCSTGT target go to their own per-instrument CALIB tabs. Friendlier column labels (TARGET, IMAGETYPE, OBSMODE, FASU A/B, GRISM, FIBER). Shows TELALT (1 decimal) and AIRMASS (2 decimals) for every file. A search bar filters all tables across every column (filtered tabs are marked with *). Select a range of rows to create a session-only AMPA sequence. Double-click a file to load it into the AMPA viewer.",
             "author": "samgrund",
             "category": "Plugins",
             "section": "NOT Toolkit",
             "min_app_version": "0.6.0",
             "download_url": "https://github.com/samgrund/not-tools-ampa-plugin/raw/main/file_sorter.py",
-            "checksum": "sha256:7b87e99c34da026f9c2d6f86649f0501fa02df1b71b3758b11f63f73976c470c",
+            "checksum": "sha256:c11f8abef74c743d5b955967589e1f4de3dea9ee31039d0634e4c09e03af62b2",
             "homepage": "https://github.com/samgrund/not-tools-ampa-plugin",
-            "download_size": 29788,
+            "download_size": 32323,
             "entry_class": "FileSorterPlugin"
         }
     ]
