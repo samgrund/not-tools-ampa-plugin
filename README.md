@@ -64,11 +64,15 @@ Plugins → Local Plugin Directories** (e.g.
      nothing disappears from the listing.
    - Click any column header to sort (`EXPTIME` sorts numerically);
      row tooltips show the absolute file path.
+   - Rows are **shaded by `GROUPID`** — each group gets a soft pastel
+     colour (cycled per tab so adjacent groups always differ; rows
+     without a `GROUPID` stay unshaded). Grouped tabs drop the
+     alternating-row stripes in favour of the shading.
 4. **Double-click a row** (or select it and press **Load Selected**)
    to open the file in the AMPA viewer. Unreadable files ask for
    confirmation first.
 5. **Rescan** re-runs the scan (the folder is remembered between
-   sessions).
+   sessions and scanned automatically when the plugin window opens).
 
 The scan runs as a cancellable background task, so even huge data
 folders never freeze the GUI. No extra dependencies — only `astropy`

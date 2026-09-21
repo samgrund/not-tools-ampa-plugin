@@ -27,7 +27,7 @@ import warnings
 from typing import Any, Dict, List, Optional
 
 from astropy.io import fits
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore, QtGui, QtWidgets
 
 from ampa.core.apis import settings_api, ui_api
 from ampa.core.basemodule import BaseModule
@@ -202,11 +202,27 @@ def format_date_obs(value) -> str:
     return text
 
 
+# Dedicated formatters per header key (everything else falls back to
+# format_value()).
 _KEY_FORMATTERS = {
     "OBS_MODE": format_value,
     "EXPTIME": format_exptime,
     "DATE-OBS": format_date_obs,
 }
+
+# Soft pastel row backgrounds, cycled through per GROUPID within a tab so
+# adjacent groups are easy to tell apart. Light enough to keep text
+# readable over them.
+_GROUP_PALETTE = (
+    QtGui.QColor(227, 238, 255),   # soft blue
+    QtGui.QColor(227, 255, 236),   # soft green
+    QtGui.QColor(255, 244, 214),   # soft amber
+    QtGui.QColor(255, 228, 240),   # soft rose
+    QtGui.QColor(224, 248, 250),   # soft cyan
+    QtGui.QColor(240, 230, 255),   # soft lavender
+    QtGui.QColor(255, 236, 224),   # soft peach
+    QtGui.QColor(236, 248, 224),   # soft lime
+)
 
 
 def format_key(header, key: str) -> str:
@@ -240,6 +256,34 @@ def table_row_values(record: Dict[str, Any], instrument: str) -> List[str]:
     if instrument == _UNREADABLE:
         row.append(format_value(record.get("error")))
     return row
+
+
+def group_id_value(record: Dict[str, Any]) -> str:
+    """The record's GROUPID (``""`` when absent or unreadable)."""
+    header = record.get("header")
+    if header is None:
+        return ""
+    return str(header.get("GROUPID", "") or "").strip()
+
+
+def assign_group_colors(records: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Map every GROUPID in *records* to a background color.
+
+    Colors cycle through the palette in order of first appearance, so
+    adjacent groups always differ; the same GROUPID maps to the same
+    color. The empty GROUPID (missing/unreadable) maps to ``None`` - no
+    shading.
+    """
+    colors: Dict[str, Any] = {}
+    assigned = 0
+    for record in records:
+        gid = group_id_value(record)
+        if not gid or gid in colors:
+            continue
+        colors[gid] = _GROUP_PALETTE[assigned % len(_GROUP_PALETTE)]
+        assigned += 1
+    colors[""] = None
+    return colors
 
 
 # ======================================================================
@@ -298,6 +342,10 @@ class FileSorterPlugin(BaseModule):
             if last and os.path.isdir(last):
                 self.folder_input.setText(last)
                 self._scan_root = last
+                # A remembered folder is already shown - scan it right
+                # away instead of leaving the user with a dead Rescan
+                # button (it only enables after a scan).
+                self._start_scan()
         self.gui_widget.show()
         self.gui_widget.raise_()
         self.gui_widget.activateWindow()
@@ -342,7 +390,7 @@ class FileSorterPlugin(BaseModule):
         bottom_row.addWidget(self.status_label, 1)
         layout.addLayout(bottom_row)
 
-        window.resize(1000, 620)
+        window.resize(1280, 680)
         self.gui_widget = window
 
     # -- folder selection / scanning ---------------------------------------
@@ -452,8 +500,14 @@ class FileSorterPlugin(BaseModule):
         header_view.setSectionResizeMode(
             0, QtWidgets.QHeaderView.ResizeMode.Stretch)
 
-        for row, record in enumerate(sorted(records,
-                                             key=lambda r: r["path"].lower())):
+        ordered = sorted(records, key=lambda r: r["path"].lower())
+        group_colors = assign_group_colors(ordered)
+        if any(color is not None for color in group_colors.values()):
+            # Row shading by GROUPID replaces the alternating stripes.
+            table.setAlternatingRowColors(False)
+
+        for row, record in enumerate(ordered):
+            color = group_colors.get(group_id_value(record))
             for column, text in enumerate(table_row_values(record, instrument)):
                 if column == 0:
                     item = QtWidgets.QTableWidgetItem(text)
@@ -470,6 +524,8 @@ class FileSorterPlugin(BaseModule):
                     item = _NumericItem(text, number)
                 else:
                     item = QtWidgets.QTableWidgetItem(text)
+                if color is not None:
+                    item.setBackground(color)
                 table.setItem(row, column, item)
 
         # Qt's default sort indicator is *descending*; pin an explicit
