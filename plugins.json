@@ -3,16 +3,16 @@
         {
             "id": "file-sorter",
             "name": "File Sorter",
-            "version": "0.1.1",
+            "version": "0.2.0",
             "description": "Recursively scans a folder for FITS files and groups them in a tree by the TCSTGT (target) and INSTRUME (instrument) headers. Select a file to inspect its headers; load it straight into the AMPA viewer.",
             "author": "samgrund",
             "category": "Plugins",
             "section": "NOT Toolkit",
             "min_app_version": "0.6.0",
             "download_url": "https://github.com/samgrund/not-tools-ampa-plugin/raw/main/file_sorter.py",
-            "checksum": "sha256:183c4569e811575a297aa028204740594c188e819cb3796c2ef24f15106492f1",
+            "checksum": "sha256:a79a93e9d9d31971fd4f7fc6c08c05ad8f3b5e6f969537d39f0a670a4cdb6a2a",
             "homepage": "https://github.com/samgrund/not-tools-ampa-plugin",
-            "download_size": 15969,
+            "download_size": 19271,
             "entry_class": "FileSorterPlugin"
         }
     ]

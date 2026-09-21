@@ -42,23 +42,28 @@ Plugins → Local Plugin Directories** (e.g.
 2. Pick a folder with **Browse…** — every FITS file below it
    (`.fits`, `.fit`, `.fts`, plus `.gz` variants, case-insensitive) is
    scanned in the background with a progress bar and cancel button.
-3. Files appear as a three-level tree:
+3. Files appear as a three-level tree with quick-scan columns for
+   `OBS_MODE`, `EXPTIME` and `DATE-OBS`:
 
    ```text
    TCSTGT (target)          INSTRUME (instrument)     files
    ├── M 31 (3)             ├── CCD1 (2)              ├── m31_a.fits
    │                        └── CCD2 (1)              └── ...
-   ├── BIAS (1)             └── CCD1 (1)
+   ├── STD (1)              └── ALFOSC (1)
    ├── (no TCSTGT)          └── (no INSTRUME)         (header missing)
    └── (unreadable)         └── (unreadable)          (header unreadable)
    ```
 
    Files without `TCSTGT` / `INSTRUME` headers are kept under
    placeholder groups, corrupt or truncated files under
-   `(unreadable)` — nothing disappears from the listing.
-4. Selecting a file shows its details (path, `TCSTGT`, `INSTRUME`, size
-   and common observation headers such as `OBJECT`, `DATE-OBS`,
-   `EXPTIME`).
+   `(unreadable)` — nothing disappears from the listing. Instrument
+   names are normalised for display (e.g. raw `ALFOSC_FASU` groups
+   under **ALFOSC**).
+4. Selecting a file shows its details (path, `TCSTGT`, `INSTRUME`,
+   size and common observation headers). Instruments with a dedicated
+   configuration view get an extra **Instrument configuration** block —
+   currently **ALFOSC** (`FAFLTNM`, `FBFLTNM`, `ALGRNM`; missing keys
+   are marked). Selecting a group shows its file count.
 5. **Load Selected** opens the selected file in the AMPA viewer.
    **Rescan** re-runs the scan (the folder is remembered between
    sessions).

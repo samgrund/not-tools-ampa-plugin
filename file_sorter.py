@@ -44,6 +44,26 @@ _NO_TARGET = "(no TCSTGT)"
 _NO_INSTRUMENT = "(no INSTRUME)"
 _UNREADABLE = "(unreadable)"
 
+# Shown in table cells when a header key is absent.
+_MISSING = "\u2014"  # em dash
+
+# Raw INSTRUME value -> display/group name. Files from the same
+# instrument arrive under different INSTRUME spellings; the alias
+# normalises them into one tree group.
+_INSTRUMENT_ALIASES = {
+    "ALFOSC_FASU": "ALFOSC",
+}
+
+# Instrument-specific header keys shown in the details pane's
+# "Instrument configuration" block (matched on the display name).
+# Extend as instruments get dedicated views (e.g. FIES).
+_INSTRUMENT_KEYS = {
+    "ALFOSC": ("FAFLTNM", "FBFLTNM", "ALGRNM"),
+}
+
+# The three tree-column keys, always visible for quick scanning.
+_COLUMN_KEYS = ("OBS_MODE", "EXPTIME", "DATE-OBS")
+
 # Additional header keywords shown in the details pane (first hit wins;
 # missing keys are simply skipped).
 _DETAIL_KEYS = ("OBJECT", "DATE-OBS", "EXPTIME", "IMAGETYP", "FILTER",
@@ -91,11 +111,15 @@ def scan_folder(root: str, handle=None) -> Dict[str, Any]:
 
         {
             "root": <scanned folder>,
-            "records": [{"path", "tcstgt", "instrume", "header", "error"}],
+            "records": [{"path", "tcstgt", "instrume", "instrume_raw",
+                         "header", "error"}],
         }
 
     Each record describes one file; ``header`` is the astropy header (or
     ``None`` for unreadable files, with ``error`` carrying the reason).
+    ``instrume`` carries the display name (alias-normalised, see
+    ``_INSTRUMENT_ALIASES``) used for grouping; ``instrume_raw`` the
+    original header value.
     """
     files = find_fits_files(root)
     total = len(files)
@@ -117,14 +141,17 @@ def scan_folder(root: str, handle=None) -> Dict[str, Any]:
                 "path": path,
                 "tcstgt": _UNREADABLE,
                 "instrume": _UNREADABLE,
+                "instrume_raw": _UNREADABLE,
                 "header": None,
                 "error": str(exc),
             })
             continue
+        display = _INSTRUMENT_ALIASES.get(instrume.upper(), instrume)
         records.append({
             "path": path,
             "tcstgt": tcstgt or _NO_TARGET,
-            "instrume": instrume or _NO_INSTRUMENT,
+            "instrume": display or _NO_INSTRUMENT,
+            "instrume_raw": instrume,
             "header": header,
             "error": None,
         })
@@ -150,14 +177,56 @@ def format_size(num_bytes: int) -> str:
     return f"{size:.1f} TiB"
 
 
+def format_obs_mode(value) -> str:
+    """OBS_MODE cell text: trimmed value, ``_MISSING`` when absent."""
+    text = str(value or "").strip()
+    return text or _MISSING
+
+
+def format_exptime(value) -> str:
+    """EXPTIME cell text: compact number (``300`` for 300.0)."""
+    if value in (None, ""):
+        return _MISSING
+    try:
+        num = float(value)
+    except (TypeError, ValueError):
+        return str(value).strip() or _MISSING
+    if num.is_integer():
+        return str(int(num))
+    return str(num)
+
+
+def format_date_obs(value) -> str:
+    """DATE-OBS cell text: ISO trimmed to ``YYYY-MM-DD HH:MM``."""
+    text = str(value or "").strip()
+    if not text:
+        return _MISSING
+    if len(text) >= 16 and text[10] in ("T", " "):
+        return f"{text[:10]} {text[11:16]}"
+    return text
+
+
+def tree_column_values(header) -> tuple:
+    """The (OBS_MODE, EXPTIME, DATE-OBS) cell texts for a file row."""
+    if header is None:
+        return (_MISSING, _MISSING, _MISSING)
+    formatters = (format_obs_mode, format_exptime, format_date_obs)
+    return tuple(f(header.get(key, "")) for f, key in zip(formatters, _COLUMN_KEYS))
+
+
 def format_details(record: Dict[str, Any]) -> str:
     """Format the details-pane text for one scan record."""
     path = record["path"]
+    instrume = record["instrume"]
+    raw_instrume = record.get("instrume_raw") or ""
+    instrume_line = f"INSTRUME:  {instrume}"
+    if raw_instrume and raw_instrume != instrume:
+        instrume_line += f" ({raw_instrume})"
     lines = [
         f"File:      {os.path.basename(path)}",
         f"Path:      {path}",
         f"TCSTGT:    {record['tcstgt']}",
-        f"INSTRUME:  {record['instrume']}",
+        instrume_line,
     ]
     try:
         lines.append(f"Size:      {format_size(os.path.getsize(path))}")
@@ -170,6 +239,15 @@ def format_details(record: Dict[str, Any]) -> str:
         for key in _DETAIL_KEYS:
             if key in header:
                 lines.append(f"{key:<10} {header[key]}")
+        special_keys = _INSTRUMENT_KEYS.get(instrume)
+        if special_keys:
+            lines.append("")
+            lines.append(f"Instrument configuration ({instrume}):")
+            for key in special_keys:
+                if key in header:
+                    lines.append(f"{key:<10} {header[key]}")
+                else:
+                    lines.append(f"{key:<10} {_MISSING}")
     return "\n".join(lines)
 
 
@@ -238,14 +316,19 @@ class FileSorterPlugin(BaseModule):
         folder_row.addWidget(self.rescan_button)
         layout.addLayout(folder_row)
 
-        # Tree: TCSTGT -> INSTRUME -> files
+        # Tree: TCSTGT -> INSTRUME -> files, with quick-scan columns for
+        # OBS_MODE / EXPTIME / DATE-OBS and the group file counts.
         self.tree = QtWidgets.QTreeWidget()
-        self.tree.setColumnCount(2)
-        self.tree.setHeaderLabels(["Name", "Files"])
+        self.tree.setColumnCount(5)
+        self.tree.setHeaderLabels(
+            ["Name", "OBS_MODE", "EXPTIME", "DATE-OBS", "Files"])
         self.tree.setRootIsDecorated(True)
         self.tree.setAlternatingRowColors(True)
         self.tree.header().setSectionResizeMode(
             0, QtWidgets.QHeaderView.ResizeMode.Stretch)
+        for column in (1, 2, 3, 4):
+            self.tree.header().setSectionResizeMode(
+                column, QtWidgets.QHeaderView.ResizeMode.ResizeToContents)
         self.tree.currentItemChanged.connect(self._on_tree_selection)
         layout.addWidget(self.tree, 1)
 
@@ -269,7 +352,7 @@ class FileSorterPlugin(BaseModule):
         bottom_row.addWidget(self.status_label, 1)
         layout.addLayout(bottom_row)
 
-        window.resize(760, 600)
+        window.resize(980, 600)
         self.gui_widget = window
 
     # -- folder selection / scanning ---------------------------------------
@@ -353,18 +436,22 @@ class FileSorterPlugin(BaseModule):
             instruments = tree[tcstgt]
             n_target = sum(len(recs) for recs in instruments.values())
             target_item = QtWidgets.QTreeWidgetItem(
-                [str(tcstgt), str(n_target)])
+                [str(tcstgt), "", "", "", str(n_target)])
             target_item.setData(
                 0, QtCore.Qt.ItemDataRole.UserRole, "group")
             for instrume in sorted(instruments, key=str.lower):
                 records = instruments[instrume]
                 instr_item = QtWidgets.QTreeWidgetItem(
-                    [str(instrume), str(len(records))])
+                    [str(instrume), "", "", "", str(len(records))])
                 instr_item.setData(
                     0, QtCore.Qt.ItemDataRole.UserRole, "group")
                 for record in sorted(records, key=lambda r: r["path"].lower()):
-                    leaf = QtWidgets.QTreeWidgetItem(
-                        [os.path.basename(record["path"]), ""])
+                    obs_mode, exptime, date_obs = tree_column_values(
+                        record.get("header"))
+                    leaf = QtWidgets.QTreeWidgetItem([
+                        os.path.basename(record["path"]),
+                        obs_mode, exptime, date_obs, "",
+                    ])
                     leaf.setData(0, QtCore.Qt.ItemDataRole.UserRole, record)
                     leaf.setToolTip(0, record["path"])
                     instr_item.addChild(leaf)
@@ -383,7 +470,7 @@ class FileSorterPlugin(BaseModule):
         if data == "group":
             self.load_button.setEnabled(False)
             self.details_view.setPlainText(
-                f"{current.text(0)} — {current.text(1)} file(s)")
+                f"{current.text(0)} \u2014 {current.text(4)} file(s)")
         else:
             record = data
             self.load_button.setEnabled(True)
