@@ -47,13 +47,13 @@ Plugins → Local Plugin Directories** (e.g.
 
    ```text
    [ ALFOSC (23) ] [ CCD1 (7) ] [ (no INSTRUME) ] [ (unreadable) ]
-    File     TCSTGT  OBJECT  IMAGETYP  FILTER  OBS_MODE  EXPTIME  DATE-OBS       FAFLTNM  FBFLTNM  ALGRNM
-    a.fits   M 31    M31     —         —       Imaging   300      2026-09-21 …   B_V      Empty    Grism#4
+    File     TCSTGT  GROUPID  BLOCKID  SEQID  OBJECT  IMAGETYP  FILTER  OBS_MODE  EXPTIME  DATE-OBS       FAFLTNM  FBFLTNM  ALGRNM
+    a.fits   M 31    G-7      BLK-1    SEQ-9  M31     —         —       Imaging   300      2026-09-21 …   B_V      Empty    Grism#4
    ```
 
-   - Common columns on every tab: `File`, `TCSTGT`, `OBJECT`,
-     `IMAGETYP`, `FILTER`, `OBS_MODE`, `EXPTIME`, `DATE-OBS`; missing
-     values show `—`.
+   - Common columns on every tab: `File`, `TCSTGT`, `GROUPID`,
+     `BLOCKID`, `SEQID`, `OBJECT`, `IMAGETYP`, `FILTER`, `OBS_MODE`,
+     `EXPTIME`, `DATE-OBS`; missing values show `—`.
    - Instruments with a dedicated view get extra columns — currently
      **ALFOSC** (`FAFLTNM`, `FBFLTNM`, `ALGRNM`); more (e.g. FIES)
      can be added to the registry in `file_sorter.py`.

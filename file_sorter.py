@@ -65,8 +65,10 @@ _INSTRUMENT_KEYS = {
 }
 
 # Header keys shown as common columns on every tab (after the File and
-# TCSTGT columns).
-_COMMON_HEADER_KEYS = ("OBJECT", "IMAGETYP", "FILTER",
+# TCSTGT columns): observation identifiers first, then context and
+# observation-mode keys.
+_COMMON_HEADER_KEYS = ("GROUPID", "BLOCKID", "SEQID",
+                       "OBJECT", "IMAGETYP", "FILTER",
                        "OBS_MODE", "EXPTIME", "DATE-OBS")
 
 
