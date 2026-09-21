@@ -38,7 +38,7 @@ Plugins → Local Plugin Directories** (e.g.
 
 ## File Sorter usage
 
-1. **NOT Toolkit → File Sorter** opens the plugin window.
+1. **Plugins → NOT Toolkit → File Sorter** opens the plugin window.
 2. Pick a folder with **Browse…** — every FITS file below it
    (`.fits`, `.fit`, `.fts`, plus `.gz` variants, case-insensitive) is
    scanned in the background with a progress bar and cancel button.

@@ -178,12 +178,13 @@ def format_details(record: Dict[str, Any]) -> str:
 # ======================================================================
 
 class FileSorterPlugin(BaseModule):
-    """NOT Toolkit ▸ File Sorter."""
+    """Plugins ▸ NOT Toolkit ▸ File Sorter."""
 
     def __init__(self):
         super().__init__(
             title="File Sorter",
-            category="NOT Toolkit",
+            category="Plugins",
+            section="NOT Toolkit",
         )
         settings_api.define_setting(
             group=_SETTINGS_GROUP,
