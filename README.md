@@ -42,30 +42,32 @@ Plugins → Local Plugin Directories** (e.g.
 2. Pick a folder with **Browse…** — every FITS file below it
    (`.fits`, `.fit`, `.fts`, plus `.gz` variants, case-insensitive) is
    scanned in the background with a progress bar and cancel button.
-3. Files appear as a three-level tree with quick-scan columns for
-   `OBS_MODE`, `EXPTIME` and `DATE-OBS`:
+3. The files are shown in **one tab per instrument** — each tab a
+   table with one row per file:
 
    ```text
-   TCSTGT (target)          INSTRUME (instrument)     files
-   ├── M 31 (3)             ├── CCD1 (2)              ├── m31_a.fits
-   │                        └── CCD2 (1)              └── ...
-   ├── STD (1)              └── ALFOSC (1)
-   ├── (no TCSTGT)          └── (no INSTRUME)         (header missing)
-   └── (unreadable)         └── (unreadable)          (header unreadable)
+   [ ALFOSC (23) ] [ CCD1 (7) ] [ (no INSTRUME) ] [ (unreadable) ]
+    File     TCSTGT  OBJECT  IMAGETYP  FILTER  OBS_MODE  EXPTIME  DATE-OBS       FAFLTNM  FBFLTNM  ALGRNM
+    a.fits   M 31    M31     —         —       Imaging   300      2026-09-21 …   B_V      Empty    Grism#4
    ```
 
-   Files without `TCSTGT` / `INSTRUME` headers are kept under
-   placeholder groups, corrupt or truncated files under
-   `(unreadable)` — nothing disappears from the listing. Instrument
-   names are normalised for display (e.g. raw `ALFOSC_FASU` groups
-   under **ALFOSC**).
-4. Selecting a file shows its details (path, `TCSTGT`, `INSTRUME`,
-   size and common observation headers). Instruments with a dedicated
-   configuration view get an extra **Instrument configuration** block —
-   currently **ALFOSC** (`FAFLTNM`, `FBFLTNM`, `ALGRNM`; missing keys
-   are marked). Selecting a group shows its file count.
-5. **Load Selected** opens the selected file in the AMPA viewer.
-   **Rescan** re-runs the scan (the folder is remembered between
+   - Common columns on every tab: `File`, `TCSTGT`, `OBJECT`,
+     `IMAGETYP`, `FILTER`, `OBS_MODE`, `EXPTIME`, `DATE-OBS`; missing
+     values show `—`.
+   - Instruments with a dedicated view get extra columns — currently
+     **ALFOSC** (`FAFLTNM`, `FBFLTNM`, `ALGRNM`); more (e.g. FIES)
+     can be added to the registry in `file_sorter.py`.
+   - Instrument names are normalised (raw `ALFOSC_FASU` groups under
+     **ALFOSC**).
+   - Files missing `INSTRUME` land on a `(no INSTRUME)` tab; corrupt or
+     truncated files on an `(unreadable)` tab with an `Error` column —
+     nothing disappears from the listing.
+   - Click any column header to sort (`EXPTIME` sorts numerically);
+     row tooltips show the absolute file path.
+4. **Double-click a row** (or select it and press **Load Selected**)
+   to open the file in the AMPA viewer. Unreadable files ask for
+   confirmation first.
+5. **Rescan** re-runs the scan (the folder is remembered between
    sessions).
 
 The scan runs as a cancellable background task, so even huge data

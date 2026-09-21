@@ -1,16 +1,19 @@
 """File Sorter plugin for AMPA.
 
-Recursively scans a user-selected folder for FITS files and presents them
-in a tree grouped first by the ``TCSTGT`` header entry (telescope target)
-and then by the ``INSTRUME`` key (instrument). Selecting a file shows its
-details (grouping headers plus a few common observation keywords); the
-**Load Selected** button opens it in the AMPA viewer.
+Recursively scans a user-selected folder for FITS files and presents
+them in one tab per instrument (the ``INSTRUME`` header, normalised via
+aliases - e.g. raw ``ALFOSC_FASU`` groups under **ALFOSC**). Each tab
+is a table with one row per file: common columns (``TCSTGT``, ``OBJECT``,
+``IMAGETYP``, ``FILTER``, ``OBS_MODE``, ``EXPTIME``, ``DATE-OBS``) plus
+the instrument's dedicated configuration columns (ALFOSC: ``FAFLTNM``,
+``FBFLTNM``, ``ALGRNM``). Double-click a row (or use **Load Selected**)
+to open the file in the AMPA viewer.
 
-Files missing ``TCSTGT`` / ``INSTRUME`` are kept under ``(no TCSTGT)`` /
-``(no INSTRUME)`` placeholder groups; files whose header cannot be read
-(corrupt, truncated, ...) land under ``(unreadable)``. The scan itself
-runs on a background task with a progress bar and cancel support, so
-huge data folders never freeze the GUI.
+Files missing headers land under placeholder tabs (``(no TCSTGT)`` /
+``(no INSTRUME)``); files whose header cannot be read (corrupt,
+truncated, ...) land on an ``(unreadable)`` tab with an ``Error``
+column. The scan itself runs on a background task with a progress bar
+and cancel support, so huge data folders never freeze the GUI.
 
 The plugin is distributed via the ``not-tools-ampa-plugin`` git
 repository: clone it and add the folder as a Local Plugin Directory, or
@@ -47,27 +50,24 @@ _UNREADABLE = "(unreadable)"
 # Shown in table cells when a header key is absent.
 _MISSING = "\u2014"  # em dash
 
-# Raw INSTRUME value -> display/group name. Files from the same
+# Raw INSTRUME value -> display/tab name. Files from the same
 # instrument arrive under different INSTRUME spellings; the alias
-# normalises them into one tree group.
+# normalises them into one tab.
 _INSTRUMENT_ALIASES = {
     "ALFOSC_FASU": "ALFOSC",
 }
 
-# Instrument-specific header keys shown in the details pane's
-# "Instrument configuration" block (matched on the display name).
-# Extend as instruments get dedicated views (e.g. FIES).
+# Instrument-specific header keys that become extra table columns on
+# that instrument's tab (matched on the display name). Extend as
+# instruments get dedicated views (e.g. FIES).
 _INSTRUMENT_KEYS = {
     "ALFOSC": ("FAFLTNM", "FBFLTNM", "ALGRNM"),
 }
 
-# The three tree-column keys, always visible for quick scanning.
-_COLUMN_KEYS = ("OBS_MODE", "EXPTIME", "DATE-OBS")
-
-# Additional header keywords shown in the details pane (first hit wins;
-# missing keys are simply skipped).
-_DETAIL_KEYS = ("OBJECT", "DATE-OBS", "EXPTIME", "IMAGETYP", "FILTER",
-                "TELESCOP", "OBSERVER", "NAXIS1", "NAXIS2")
+# Header keys shown as common columns on every tab (after the File and
+# TCSTGT columns).
+_COMMON_HEADER_KEYS = ("OBJECT", "IMAGETYP", "FILTER",
+                       "OBS_MODE", "EXPTIME", "DATE-OBS")
 
 
 # ======================================================================
@@ -158,27 +158,21 @@ def scan_folder(root: str, handle=None) -> Dict[str, Any]:
     return {"root": root, "records": records}
 
 
-def build_tree(records: List[Dict[str, Any]]) -> Dict[str, Dict[str, List[Dict[str, Any]]]]:
-    """Group scan records into ``{tcstgt: {instrume: [record, ...]}}``."""
-    tree: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
+def group_by_instrument(records: List[Dict[str, Any]]
+                        ) -> Dict[str, List[Dict[str, Any]]]:
+    """Group scan records into ``{instrument display name: [record, ...]}``.
+
+    The order within each group follows the (already deterministic)
+    record order.
+    """
+    groups: Dict[str, List[Dict[str, Any]]] = {}
     for record in records:
-        tree.setdefault(record["tcstgt"], {}) \
-            .setdefault(record["instrume"], []).append(record)
-    return tree
+        groups.setdefault(record["instrume"], []).append(record)
+    return groups
 
 
-def format_size(num_bytes: int) -> str:
-    """Human-readable byte count."""
-    size = float(num_bytes)
-    for unit in ("B", "KiB", "MiB", "GiB", "TiB"):
-        if size < 1024.0 or unit == "TiB":
-            return f"{size:.1f} {unit}" if unit != "B" else f"{int(size)} B"
-        size /= 1024.0
-    return f"{size:.1f} TiB"
-
-
-def format_obs_mode(value) -> str:
-    """OBS_MODE cell text: trimmed value, ``_MISSING`` when absent."""
+def format_value(value) -> str:
+    """Generic cell text: trimmed value, ``_MISSING`` when absent."""
     text = str(value or "").strip()
     return text or _MISSING
 
@@ -206,54 +200,67 @@ def format_date_obs(value) -> str:
     return text
 
 
-def tree_column_values(header) -> tuple:
-    """The (OBS_MODE, EXPTIME, DATE-OBS) cell texts for a file row."""
-    if header is None:
-        return (_MISSING, _MISSING, _MISSING)
-    formatters = (format_obs_mode, format_exptime, format_date_obs)
-    return tuple(f(header.get(key, "")) for f, key in zip(formatters, _COLUMN_KEYS))
+_KEY_FORMATTERS = {
+    "OBS_MODE": format_value,
+    "EXPTIME": format_exptime,
+    "DATE-OBS": format_date_obs,
+}
 
 
-def format_details(record: Dict[str, Any]) -> str:
-    """Format the details-pane text for one scan record."""
-    path = record["path"]
-    instrume = record["instrume"]
-    raw_instrume = record.get("instrume_raw") or ""
-    instrume_line = f"INSTRUME:  {instrume}"
-    if raw_instrume and raw_instrume != instrume:
-        instrume_line += f" ({raw_instrume})"
-    lines = [
-        f"File:      {os.path.basename(path)}",
-        f"Path:      {path}",
-        f"TCSTGT:    {record['tcstgt']}",
-        instrume_line,
-    ]
-    try:
-        lines.append(f"Size:      {format_size(os.path.getsize(path))}")
-    except OSError:
-        pass
+def format_key(header, key: str) -> str:
+    """Format one header-key cell using the key's dedicated formatter."""
+    if header is None or key not in header:
+        return _MISSING
+    return _KEY_FORMATTERS.get(key, format_value)(header[key])
+
+
+def table_headers(instrument: str) -> List[str]:
+    """Column headers for one instrument tab."""
+    headers = ["File", "TCSTGT", *_COMMON_HEADER_KEYS]
+    headers.extend(_INSTRUMENT_KEYS.get(instrument, ()))
+    if instrument == _UNREADABLE:
+        headers.append("Error")
+    return headers
+
+
+def table_row_values(record: Dict[str, Any], instrument: str) -> List[str]:
+    """Cell texts for one record, aligned with :func:`table_headers`."""
     header = record.get("header")
-    if header is None:
-        lines.append(f"Error:     {record.get('error') or 'header unreadable'}")
-    else:
-        for key in _DETAIL_KEYS:
-            if key in header:
-                lines.append(f"{key:<10} {header[key]}")
-        special_keys = _INSTRUMENT_KEYS.get(instrume)
-        if special_keys:
-            lines.append("")
-            lines.append(f"Instrument configuration ({instrume}):")
-            for key in special_keys:
-                if key in header:
-                    lines.append(f"{key:<10} {header[key]}")
-                else:
-                    lines.append(f"{key:<10} {_MISSING}")
-    return "\n".join(lines)
+    row = [
+        os.path.basename(record["path"]),
+        _MISSING if record["tcstgt"] in (_NO_TARGET, _UNREADABLE)
+        else record["tcstgt"],
+    ]
+    for key in _COMMON_HEADER_KEYS:
+        row.append(format_key(header, key))
+    for key in _INSTRUMENT_KEYS.get(instrument, ()):
+        row.append(format_key(header, key))
+    if instrument == _UNREADABLE:
+        row.append(format_value(record.get("error")))
+    return row
 
 
 # ======================================================================
 # Plugin
 # ======================================================================
+
+class _NumericItem(QtWidgets.QTableWidgetItem):
+    """Table item that sorts numerically (used for the EXPTIME column).
+
+    Qt compares table items by display text, which orders ``"300"``
+    before ``"90"``; this subclass compares the underlying float instead.
+    Missing values sort last (``+inf``).
+    """
+
+    def __init__(self, text: str, number: float):
+        super().__init__(text)
+        self._number = number
+
+    def __lt__(self, other):
+        if isinstance(other, _NumericItem):
+            return self._number < other._number
+        return super().__lt__(other)
+
 
 class FileSorterPlugin(BaseModule):
     """Plugins ▸ NOT Toolkit ▸ File Sorter."""
@@ -316,30 +323,11 @@ class FileSorterPlugin(BaseModule):
         folder_row.addWidget(self.rescan_button)
         layout.addLayout(folder_row)
 
-        # Tree: TCSTGT -> INSTRUME -> files, with quick-scan columns for
-        # OBS_MODE / EXPTIME / DATE-OBS and the group file counts.
-        self.tree = QtWidgets.QTreeWidget()
-        self.tree.setColumnCount(5)
-        self.tree.setHeaderLabels(
-            ["Name", "OBS_MODE", "EXPTIME", "DATE-OBS", "Files"])
-        self.tree.setRootIsDecorated(True)
-        self.tree.setAlternatingRowColors(True)
-        self.tree.header().setSectionResizeMode(
-            0, QtWidgets.QHeaderView.ResizeMode.Stretch)
-        for column in (1, 2, 3, 4):
-            self.tree.header().setSectionResizeMode(
-                column, QtWidgets.QHeaderView.ResizeMode.ResizeToContents)
-        self.tree.currentItemChanged.connect(self._on_tree_selection)
-        layout.addWidget(self.tree, 1)
-
-        # Details pane
-        details_group = QtWidgets.QGroupBox("Details")
-        details_layout = QtWidgets.QVBoxLayout(details_group)
-        self.details_view = QtWidgets.QPlainTextEdit()
-        self.details_view.setReadOnly(True)
-        self.details_view.setMaximumHeight(180)
-        details_layout.addWidget(self.details_view)
-        layout.addWidget(details_group)
+        # One tab per instrument; each tab is a table with one row per
+        # file and that instrument's columns.
+        self.tabs = QtWidgets.QTabWidget()
+        self.tabs.setDocumentMode(True)
+        layout.addWidget(self.tabs, 1)
 
         # Bottom row: load button + status label
         bottom_row = QtWidgets.QHBoxLayout()
@@ -352,7 +340,7 @@ class FileSorterPlugin(BaseModule):
         bottom_row.addWidget(self.status_label, 1)
         layout.addLayout(bottom_row)
 
-        window.resize(980, 600)
+        window.resize(1000, 620)
         self.gui_widget = window
 
     # -- folder selection / scanning ---------------------------------------
@@ -378,8 +366,7 @@ class FileSorterPlugin(BaseModule):
                 "File Sorter", "Please select a valid folder first.")
             return False
         self._scan_root = folder
-        self.tree.clear()
-        self.details_view.clear()
+        self.tabs.clear()
         self.status_label.setText(f"Scanning {folder} …")
         self.rescan_button.setEnabled(False)
         started = self.run_task(
@@ -403,12 +390,11 @@ class FileSorterPlugin(BaseModule):
 
     def _on_scan_done(self, result):
         self._records = result["records"]
-        self._populate_tree(build_tree(self._records))
+        self._populate_tabs(self._records)
         self.rescan_button.setEnabled(True)
-        unreadable = sum(1 for r in self._records if r["header"] is None)
-        n_targets = len({r["tcstgt"] for r in self._records})
-        n_instr = len({(r["tcstgt"], r["instrume"]) for r in self._records})
-        msg = (f"{n_targets} target(s) · {n_instr} instrument group(s) · "
+        groups = group_by_instrument(self._records)
+        unreadable = len(groups.get(_UNREADABLE, ()))
+        msg = (f"{len(groups) - (1 if unreadable else 0)} instrument(s) · "
                f"{len(self._records)} file(s)")
         if unreadable:
             msg += f" · {unreadable} unreadable"
@@ -428,63 +414,100 @@ class FileSorterPlugin(BaseModule):
         self.rescan_button.setEnabled(True)
         self.status_label.setText("Scan cancelled.")
 
-    # -- tree population ----------------------------------------------------
+    # -- tab / table population ---------------------------------------------
 
-    def _populate_tree(self, tree):
-        self.tree.clear()
-        for tcstgt in sorted(tree, key=str.lower):
-            instruments = tree[tcstgt]
-            n_target = sum(len(recs) for recs in instruments.values())
-            target_item = QtWidgets.QTreeWidgetItem(
-                [str(tcstgt), "", "", "", str(n_target)])
-            target_item.setData(
-                0, QtCore.Qt.ItemDataRole.UserRole, "group")
-            for instrume in sorted(instruments, key=str.lower):
-                records = instruments[instrume]
-                instr_item = QtWidgets.QTreeWidgetItem(
-                    [str(instrume), "", "", "", str(len(records))])
-                instr_item.setData(
-                    0, QtCore.Qt.ItemDataRole.UserRole, "group")
-                for record in sorted(records, key=lambda r: r["path"].lower()):
-                    obs_mode, exptime, date_obs = tree_column_values(
-                        record.get("header"))
-                    leaf = QtWidgets.QTreeWidgetItem([
-                        os.path.basename(record["path"]),
-                        obs_mode, exptime, date_obs, "",
-                    ])
-                    leaf.setData(0, QtCore.Qt.ItemDataRole.UserRole, record)
-                    leaf.setToolTip(0, record["path"])
-                    instr_item.addChild(leaf)
-                target_item.addChild(instr_item)
-            self.tree.addTopLevelItem(target_item)
-        self.tree.expandToDepth(0)
+    def _populate_tabs(self, records):
+        """Rebuild the instrument tabs from scan records."""
+        self.tabs.clear()
+        self.load_button.setEnabled(False)
+        groups = group_by_instrument(records)
+        for instrument in sorted(groups, key=str.lower):
+            table = self._build_table(instrument, groups[instrument])
+            self.tabs.addTab(table,
+                             f"{instrument} ({len(groups[instrument])})")
 
-    # -- selection / details -------------------------------------------------
+    def _build_table(self, instrument: str,
+                    records: List[Dict[str, Any]]) -> QtWidgets.QTableWidget:
+        headers = table_headers(instrument)
+        try:
+            exptime_column = headers.index("EXPTIME")
+        except ValueError:
+            exptime_column = -1
 
-    def _on_tree_selection(self, current, _previous):
-        if current is None:
-            self.load_button.setEnabled(False)
-            self.details_view.clear()
-            return
-        data = current.data(0, QtCore.Qt.ItemDataRole.UserRole)
-        if data == "group":
-            self.load_button.setEnabled(False)
-            self.details_view.setPlainText(
-                f"{current.text(0)} \u2014 {current.text(4)} file(s)")
-        else:
-            record = data
-            self.load_button.setEnabled(True)
-            self.details_view.setPlainText(format_details(record))
+        table = QtWidgets.QTableWidget(len(records), len(headers))
+        table.setHorizontalHeaderLabels(headers)
+        table.verticalHeader().setVisible(False)
+        table.setSelectionBehavior(
+            QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows)
+        table.setSelectionMode(
+            QtWidgets.QAbstractItemView.SelectionMode.SingleSelection)
+        table.setEditTriggers(
+            QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers)
+        table.setAlternatingRowColors(True)
+        header_view = table.horizontalHeader()
+        header_view.setSectionResizeMode(
+            QtWidgets.QHeaderView.ResizeMode.ResizeToContents)
+        header_view.setSectionResizeMode(
+            0, QtWidgets.QHeaderView.ResizeMode.Stretch)
+
+        for row, record in enumerate(sorted(records,
+                                             key=lambda r: r["path"].lower())):
+            for column, text in enumerate(table_row_values(record, instrument)):
+                if column == 0:
+                    item = QtWidgets.QTableWidgetItem(text)
+                    item.setData(QtCore.Qt.ItemDataRole.UserRole, record)
+                    item.setToolTip(record["path"])
+                elif column == exptime_column:
+                    # Numeric item so the EXPTIME column sorts
+                    # numerically (text sort would order "9" after "10").
+                    fits_header = record.get("header") or {}
+                    try:
+                        number = float(fits_header["EXPTIME"])
+                    except (KeyError, TypeError, ValueError):
+                        number = float("inf")
+                    item = _NumericItem(text, number)
+                else:
+                    item = QtWidgets.QTableWidgetItem(text)
+                table.setItem(row, column, item)
+
+        # Qt's default sort indicator is *descending*; pin an explicit
+        # ascending order so enabling sorting doesn't reverse the rows.
+        table.horizontalHeader().setSortIndicator(
+            0, QtCore.Qt.SortOrder.AscendingOrder)
+        table.setSortingEnabled(True)
+        table.itemDoubleClicked.connect(self._on_item_double_clicked)
+        table.itemSelectionChanged.connect(self._update_load_button)
+        return table
+
+    # -- selection / loading --------------------------------------------------
+
+    def _current_record(self) -> Optional[Dict[str, Any]]:
+        """The record on the currently selected row of the current tab."""
+        table = self.tabs.currentWidget()
+        if not isinstance(table, QtWidgets.QTableWidget):
+            return None
+        item = table.item(table.currentRow(), 0)
+        if item is None:
+            return None
+        record = item.data(QtCore.Qt.ItemDataRole.UserRole)
+        return record if isinstance(record, dict) else None
+
+    def _update_load_button(self):
+        self.load_button.setEnabled(self._current_record() is not None)
+
+    def _on_item_double_clicked(self, item):
+        record = item.data(QtCore.Qt.ItemDataRole.UserRole)
+        if isinstance(record, dict):
+            self._load_record(record)
 
     def _load_selected(self):
-        item = self.tree.currentItem()
-        if item is None:
-            return
-        record = item.data(0, QtCore.Qt.ItemDataRole.UserRole)
-        if not isinstance(record, dict):
-            return
+        record = self._current_record()
+        if record is not None:
+            self._load_record(record)
+
+    def _load_record(self, record: Dict[str, Any]):
         path = record["path"]
-        if record["header"] is None:
+        if record.get("header") is None:
             if not ui_api.confirm_dialog(
                     "File Sorter",
                     "This file could not be read during the scan.\n"
