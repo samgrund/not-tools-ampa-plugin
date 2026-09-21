@@ -13,10 +13,10 @@ the instrument's dedicated configuration columns (ALFOSC: ``FASU A``,
 labels than the raw FITS keywords where a mapping exists (see
 ``_KEY_LABELS``). Double-click a row (or use **Load Selected**) to open
 the file in the AMPA viewer; select a range of rows and use **New
-Sequence…** (or the table's context menu) to create a session-only AMPA
-sequence from them. The search bar above the tabs filters every table
-across all columns (case-insensitive); tabs that hide rows get a ``*``
-appended to their name.
+Sequence From Selected ...** (or the table's context menu) to create a
+session-only AMPA sequence from them. The search bar above the tabs
+filters every table across all columns (case-insensitive); tabs that
+hide rows get a ``*`` appended to their name.
 
 Files missing headers land under placeholder tabs (``(no TARGET)`` /
 ``(no INSTRUME)``); files whose header cannot be read (corrupt,
@@ -58,7 +58,7 @@ _NO_INSTRUMENT = "(no INSTRUME)"
 _UNREADABLE = "(unreadable)"
 
 # Shown in table cells when a header key is absent.
-_MISSING = "\u2014"  # em dash
+_MISSING = "-"
 
 # Raw INSTRUME value -> display/tab name. Files from the same
 # instrument arrive under different INSTRUME spellings; the alias
@@ -149,7 +149,7 @@ def scan_folder(root: str, handle=None) -> Dict[str, Any]:
     ``_INSTRUMENT_ALIASES``) used for grouping; ``instrume_raw`` the
     original header value. ``is_calib`` flags non-science files
     (``IMAGECAT`` other than ``SCIENCE``, case-insensitive) and files
-    without a ``TCSTGT`` — both are shown on a ``<INSTRUMENT> CALIB``
+    without a ``TCSTGT``; both are shown on a ``<INSTRUMENT> CALIB``
     tab.
     """
     files = find_fits_files(root)
@@ -453,7 +453,7 @@ class FileSorterPlugin(BaseModule):
         self.folder_input.setReadOnly(True)
         self.folder_input.setPlaceholderText("No folder selected")
         folder_row.addWidget(self.folder_input, 1)
-        self.browse_button = QtWidgets.QPushButton("Browse…")
+        self.browse_button = QtWidgets.QPushButton("Browse...")
         self.browse_button.clicked.connect(self._choose_folder)
         folder_row.addWidget(self.browse_button)
         self.rescan_button = QtWidgets.QPushButton("Rescan")
@@ -464,8 +464,7 @@ class FileSorterPlugin(BaseModule):
 
         # Search bar above the tabs: filters every table at once.
         self.search_input = QtWidgets.QLineEdit()
-        self.search_input.setPlaceholderText(
-            "Search all columns — filters the tables")
+        self.search_input.setPlaceholderText("Search all columns")
         self.search_input.setClearButtonEnabled(True)
         self.search_input.textChanged.connect(self._apply_search_filter)
         layout.addWidget(self.search_input)
@@ -479,7 +478,8 @@ class FileSorterPlugin(BaseModule):
 
         # Bottom row: sequence + load buttons, status label
         bottom_row = QtWidgets.QHBoxLayout()
-        self.sequence_button = QtWidgets.QPushButton("New Sequence…")
+        self.sequence_button = QtWidgets.QPushButton(
+            "New Sequence From Selected ...")
         self.sequence_button.setToolTip(
             "Create a new AMPA sequence from the selected rows\n"
             "(session-only - save it via the Sequence Manager)")
@@ -522,7 +522,7 @@ class FileSorterPlugin(BaseModule):
             return False
         self._scan_root = folder
         self.tabs.clear()
-        self.status_label.setText(f"Scanning {folder} …")
+        self.status_label.setText(f"Scanning {folder}...")
         self.rescan_button.setEnabled(False)
         started = self.run_task(
             self._scan_work,
@@ -530,7 +530,7 @@ class FileSorterPlugin(BaseModule):
             on_error=self._on_scan_error,
             on_cancel=self._on_scan_cancelled,
             title="Scanning FITS headers",
-            message="Collecting FITS files…",
+            message="Collecting FITS files...",
             cancelable=True,
             widgets=(self.browse_button, self.rescan_button,
                      self.load_button, self.sequence_button),
@@ -550,10 +550,10 @@ class FileSorterPlugin(BaseModule):
         groups = group_by_instrument(self._records)
         instruments = {base_instrument(name) for name in groups}
         unreadable = len(groups.get(_UNREADABLE, ()))
-        msg = (f"{len(instruments) - (1 if unreadable else 0)} instrument(s) · "
+        msg = (f"{len(instruments) - (1 if unreadable else 0)} instrument(s), "
                f"{len(self._records)} file(s)")
         if unreadable:
-            msg += f" · {unreadable} unreadable"
+            msg += f", {unreadable} unreadable"
         self.status_label.setText(msg)
         if not self._records:
             self.status_label.setText("No FITS files found in this folder.")
@@ -766,7 +766,7 @@ class FileSorterPlugin(BaseModule):
             return
         name = ui_api.prompt_user(
             "File Sorter",
-            f"Create a new sequence with {len(records)} file(s) — name:")
+            f"Name for the new sequence with {len(records)} file(s):")
         if name is None:
             return
         name = name.strip()
