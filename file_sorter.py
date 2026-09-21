@@ -2,14 +2,19 @@
 
 Recursively scans a user-selected folder for FITS files and presents
 them in one tab per instrument (the ``INSTRUME`` header, normalised via
-aliases - e.g. raw ``ALFOSC_FASU`` groups under **ALFOSC**). Each tab
-is a table with one row per file: common columns (``TCSTGT``, ``OBJECT``,
-``IMAGETYP``, ``FILTER``, ``OBS_MODE``, ``EXPTIME``, ``DATE-OBS``) plus
-the instrument's dedicated configuration columns (ALFOSC: ``FAFLTNM``,
-``FBFLTNM``, ``ALGRNM``). Double-click a row (or use **Load Selected**)
-to open the file in the AMPA viewer.
+aliases - e.g. raw ``ALFOSC_FASU`` groups under **ALFOSC**). Files whose
+``IMAGETYP`` is ``CALIB`` get their own ``<INSTRUMENT> CALIB`` tab. Each
+tab is a table with one row per file: common columns (``TARGET``,
+``OBJECT``, ``IMAGETYPE``, ``OBSMODE``, ``EXPTIME``, ``DATE-OBS``) plus
+the instrument's dedicated configuration columns (ALFOSC: ``FASU A``,
+``FASU B``, ``GRISM``; FIES: ``FIBER``). Column headers use friendlier
+labels than the raw FITS keywords where a mapping exists (see
+``_KEY_LABELS``). Double-click a row (or use **Load Selected**) to open
+the file in the AMPA viewer; select a range of rows and use **New
+Sequence…** (or the table's context menu) to create a session-only AMPA
+sequence from them.
 
-Files missing headers land under placeholder tabs (``(no TCSTGT)`` /
+Files missing headers land under placeholder tabs (``(no TARGET)`` /
 ``(no INSTRUME)``); files whose header cannot be read (corrupt,
 truncated, ...) land on an ``(unreadable)`` tab with an ``Error``
 column. The scan itself runs on a background task with a progress bar
@@ -29,7 +34,8 @@ from typing import Any, Dict, List, Optional
 from astropy.io import fits
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from ampa.core.apis import settings_api, ui_api
+from ampa.core.apis import (Sequence, sequence_api, settings_api,
+                            ui_api)
 from ampa.core.basemodule import BaseModule
 from ampa.core.logging import log
 
@@ -43,7 +49,7 @@ _KEY_LAST_FOLDER = f"{_SETTINGS_GROUP}/last_folder"
 _FITS_SUFFIXES = (".fits", ".fit", ".fts", ".fits.gz", ".fit.gz", ".fts.gz")
 
 # Placeholder group labels for missing headers / unreadable files.
-_NO_TARGET = "(no TCSTGT)"
+_NO_TARGET = "(no TARGET)"
 _NO_INSTRUMENT = "(no INSTRUME)"
 _UNREADABLE = "(unreadable)"
 
@@ -58,18 +64,33 @@ _INSTRUMENT_ALIASES = {
 }
 
 # Instrument-specific header keys that become extra table columns on
-# that instrument's tab (matched on the display name). Extend as
-# instruments get dedicated views (e.g. FIES).
+# that instrument's tab (matched on the display name; CALIB tabs reuse
+# their instrument's columns). Extend as instruments get dedicated
+# views.
 _INSTRUMENT_KEYS = {
     "ALFOSC": ("FAFLTNM", "FBFLTNM", "ALGRNM"),
+    "FIES": ("FIFMSKNM",),
+}
+
+# Friendlier display labels for FITS keywords shown as table columns.
+# Lookup always uses the raw keyword; only the visible header text
+# changes.
+_KEY_LABELS = {
+    "TCSTGT": "TARGET",
+    "IMAGETYP": "IMAGETYPE",
+    "OBS_MODE": "OBSMODE",
+    "FAFLTNM": "FASU A",
+    "FBFLTNM": "FASU B",
+    "ALGRNM": "GRISM",
+    "FIFMSKNM": "FIBER",
 }
 
 # Header keys shown as common columns on every tab (after the File and
 # TCSTGT columns): observation identifiers first, then context and
 # observation-mode keys.
 _COMMON_HEADER_KEYS = ("GROUPID", "BLOCKID", "SEQID",
-                       "OBJECT", "IMAGETYP", "FILTER",
-                       "OBS_MODE", "EXPTIME", "DATE-OBS")
+                        "OBJECT", "IMAGETYP",
+                        "OBS_MODE", "EXPTIME", "DATE-OBS")
 
 
 # ======================================================================
@@ -114,14 +135,15 @@ def scan_folder(root: str, handle=None) -> Dict[str, Any]:
         {
             "root": <scanned folder>,
             "records": [{"path", "tcstgt", "instrume", "instrume_raw",
-                         "header", "error"}],
+                         "is_calib", "header", "error"}],
         }
 
     Each record describes one file; ``header`` is the astropy header (or
     ``None`` for unreadable files, with ``error`` carrying the reason).
     ``instrume`` carries the display name (alias-normalised, see
     ``_INSTRUMENT_ALIASES``) used for grouping; ``instrume_raw`` the
-    original header value.
+    original header value. ``is_calib`` flags files whose ``IMAGETYP``
+    is exactly ``CALIB`` (case-insensitive).
     """
     files = find_fits_files(root)
     total = len(files)
@@ -144,16 +166,19 @@ def scan_folder(root: str, handle=None) -> Dict[str, Any]:
                 "tcstgt": _UNREADABLE,
                 "instrume": _UNREADABLE,
                 "instrume_raw": _UNREADABLE,
+                "is_calib": False,
                 "header": None,
                 "error": str(exc),
             })
             continue
         display = _INSTRUMENT_ALIASES.get(instrume.upper(), instrume)
+        imagetyp = str(header.get("IMAGETYP", "") or "").strip()
         records.append({
             "path": path,
             "tcstgt": tcstgt or _NO_TARGET,
             "instrume": display or _NO_INSTRUMENT,
             "instrume_raw": instrume,
+            "is_calib": imagetyp.upper() == "CALIB",
             "header": header,
             "error": None,
         })
@@ -162,14 +187,18 @@ def scan_folder(root: str, handle=None) -> Dict[str, Any]:
 
 def group_by_instrument(records: List[Dict[str, Any]]
                         ) -> Dict[str, List[Dict[str, Any]]]:
-    """Group scan records into ``{instrument display name: [record, ...]}``.
+    """Group scan records into ``{tab name: [record, ...]}``.
 
     The order within each group follows the (already deterministic)
-    record order.
+    record order. Calibration files (``is_calib``) are separated into a
+    ``<INSTRUMENT> CALIB`` tab instead of the plain instrument tab.
     """
     groups: Dict[str, List[Dict[str, Any]]] = {}
     for record in records:
-        groups.setdefault(record["instrume"], []).append(record)
+        name = record["instrume"]
+        if record.get("is_calib"):
+            name = f"{name} CALIB"
+        groups.setdefault(name, []).append(record)
     return groups
 
 
@@ -242,10 +271,25 @@ def format_key(header, key: str) -> str:
     return _KEY_FORMATTERS.get(key, format_value)(header[key])
 
 
+def base_instrument(tab_name: str) -> str:
+    """The plain instrument name behind a tab/group name.
+
+    Strips the `` CALIB`` suffix from ``<INSTRUMENT> CALIB`` tabs so
+    their tables keep the instrument's dedicated columns; other names
+    pass through unchanged.
+    """
+    if tab_name.endswith(" CALIB"):
+        return tab_name[:-len(" CALIB")]
+    return tab_name
+
+
 def table_headers(instrument: str) -> List[str]:
-    """Column headers for one instrument tab."""
-    headers = ["File", "TCSTGT", *_COMMON_HEADER_KEYS]
-    headers.extend(_INSTRUMENT_KEYS.get(instrument, ()))
+    """Column headers for one tab, with friendly labels where mapped."""
+    headers = ["File", _KEY_LABELS["TCSTGT"]]
+    headers.extend(_KEY_LABELS.get(key, key) for key in _COMMON_HEADER_KEYS)
+    headers.extend(_KEY_LABELS.get(key, key)
+                   for key in _INSTRUMENT_KEYS.get(
+                       base_instrument(instrument), ()))
     if instrument == _UNREADABLE:
         headers.append("Error")
     return headers
@@ -261,7 +305,7 @@ def table_row_values(record: Dict[str, Any], instrument: str) -> List[str]:
     ]
     for key in _COMMON_HEADER_KEYS:
         row.append(format_key(header, key))
-    for key in _INSTRUMENT_KEYS.get(instrument, ()):
+    for key in _INSTRUMENT_KEYS.get(base_instrument(instrument), ()):
         row.append(format_key(header, key))
     if instrument == _UNREADABLE:
         row.append(format_value(record.get("error")))
@@ -388,10 +432,18 @@ class FileSorterPlugin(BaseModule):
         # file and that instrument's columns.
         self.tabs = QtWidgets.QTabWidget()
         self.tabs.setDocumentMode(True)
+        self.tabs.currentChanged.connect(self._update_action_buttons)
         layout.addWidget(self.tabs, 1)
 
-        # Bottom row: load button + status label
+        # Bottom row: sequence + load buttons, status label
         bottom_row = QtWidgets.QHBoxLayout()
+        self.sequence_button = QtWidgets.QPushButton("New Sequence…")
+        self.sequence_button.setToolTip(
+            "Create a new AMPA sequence from the selected rows\n"
+            "(session-only - save it via the Sequence Manager)")
+        self.sequence_button.setEnabled(False)
+        self.sequence_button.clicked.connect(self._new_sequence_from_selection)
+        bottom_row.addWidget(self.sequence_button)
         self.load_button = QtWidgets.QPushButton("Load Selected")
         self.load_button.setToolTip("Open the selected FITS file in the AMPA viewer")
         self.load_button.setEnabled(False)
@@ -439,7 +491,7 @@ class FileSorterPlugin(BaseModule):
             message="Collecting FITS files…",
             cancelable=True,
             widgets=(self.browse_button, self.rescan_button,
-                     self.load_button),
+                     self.load_button, self.sequence_button),
         )
         if not started:
             self.rescan_button.setEnabled(True)
@@ -454,8 +506,9 @@ class FileSorterPlugin(BaseModule):
         self._populate_tabs(self._records)
         self.rescan_button.setEnabled(True)
         groups = group_by_instrument(self._records)
+        instruments = {base_instrument(name) for name in groups}
         unreadable = len(groups.get(_UNREADABLE, ()))
-        msg = (f"{len(groups) - (1 if unreadable else 0)} instrument(s) · "
+        msg = (f"{len(instruments) - (1 if unreadable else 0)} instrument(s) · "
                f"{len(self._records)} file(s)")
         if unreadable:
             msg += f" · {unreadable} unreadable"
@@ -481,6 +534,7 @@ class FileSorterPlugin(BaseModule):
         """Rebuild the instrument tabs from scan records."""
         self.tabs.clear()
         self.load_button.setEnabled(False)
+        self.sequence_button.setEnabled(False)
         groups = group_by_instrument(records)
         for instrument in sorted(groups, key=str.lower):
             table = self._build_table(instrument, groups[instrument])
@@ -501,7 +555,7 @@ class FileSorterPlugin(BaseModule):
         table.setSelectionBehavior(
             QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows)
         table.setSelectionMode(
-            QtWidgets.QAbstractItemView.SelectionMode.SingleSelection)
+            QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection)
         table.setEditTriggers(
             QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers)
         table.setAlternatingRowColors(True)
@@ -549,8 +603,12 @@ class FileSorterPlugin(BaseModule):
         table.horizontalHeader().setSortIndicator(
             0, QtCore.Qt.SortOrder.AscendingOrder)
         table.setSortingEnabled(True)
+        table.setContextMenuPolicy(
+            QtCore.Qt.ContextMenuPolicy.CustomContextMenu)
+        table.customContextMenuRequested.connect(
+            lambda pos, t=table: self._show_table_context_menu(t, pos))
         table.itemDoubleClicked.connect(self._on_item_double_clicked)
-        table.itemSelectionChanged.connect(self._update_load_button)
+        table.itemSelectionChanged.connect(self._update_action_buttons)
         return table
 
     # -- selection / loading --------------------------------------------------
@@ -566,8 +624,85 @@ class FileSorterPlugin(BaseModule):
         record = item.data(QtCore.Qt.ItemDataRole.UserRole)
         return record if isinstance(record, dict) else None
 
-    def _update_load_button(self):
+    def _update_action_buttons(self):
+        """Keep the Load / New Sequence buttons in sync with the selection."""
         self.load_button.setEnabled(self._current_record() is not None)
+        table = self.tabs.currentWidget()
+        has_selection = (
+            isinstance(table, QtWidgets.QTableWidget)
+            and table.selectionModel() is not None
+            and table.selectionModel().hasSelection())
+        self.sequence_button.setEnabled(has_selection)
+
+    def _selected_records(self,
+                          table: QtWidgets.QTableWidget
+                          ) -> List[Dict[str, Any]]:
+        """Records of the selected rows, in the table's visual order.
+
+        The visual order follows the column the tab is currently sorted
+        by, so a sequence built from a selection keeps that order.
+        """
+        records: List[Dict[str, Any]] = []
+        selection_model = table.selectionModel()
+        if selection_model is None:
+            return records
+        for index in selection_model.selectedRows(0):
+            item = table.item(index.row(), 0)
+            record = (item.data(QtCore.Qt.ItemDataRole.UserRole)
+                      if item is not None else None)
+            if isinstance(record, dict):
+                records.append(record)
+        return records
+
+    def _show_table_context_menu(self, table: QtWidgets.QTableWidget, pos):
+        records = self._selected_records(table)
+        if not records:
+            return
+        menu = QtWidgets.QMenu(table)
+        menu.addAction(
+            f"New Sequence from Selection ({len(records)} file(s))")
+        if menu.exec(table.viewport().mapToGlobal(pos)) is not None:
+            self._new_sequence_from_selection()
+
+    def _new_sequence_from_selection(self):
+        """Create a session-only AMPA sequence from the selected rows."""
+        table = self.tabs.currentWidget()
+        if not isinstance(table, QtWidgets.QTableWidget):
+            return
+        records = self._selected_records(table)
+        if not records:
+            ui_api.show_info_dialog(
+                "File Sorter",
+                "Select one or more rows first "
+                "(click, shift-click or ctrl-click).")
+            return
+        name = ui_api.prompt_user(
+            "File Sorter",
+            f"Create a new sequence with {len(records)} file(s) — name:")
+        if name is None:
+            return
+        name = name.strip()
+        if not name:
+            ui_api.show_error_dialog(
+                "File Sorter", "The sequence name is empty.")
+            return
+        if sequence_api.get_sequence_by_name(name) is not None:
+            ui_api.show_error_dialog(
+                "File Sorter",
+                f"A sequence named '{name}' already exists.")
+            return
+        sequence = Sequence(
+            name=name,
+            frames=[record["path"] for record in records],
+            temporary=True,
+        )
+        sequence_api.add_sequence(sequence)
+        ui_api.write_to_statusbar(
+            f"Created sequence '{name}' with {len(records)} file(s)",
+            timeout=4000)
+        log(__name__, __LOGMODULE__, "info",
+            f"Created session sequence '{name}' with "
+            f"{len(records)} file(s) from File Sorter")
 
     def _on_item_double_clicked(self, item):
         record = item.data(QtCore.Qt.ItemDataRole.UserRole)

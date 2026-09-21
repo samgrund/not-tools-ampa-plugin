@@ -9,7 +9,7 @@ one-click installation via AMPA's Plugin Browser.
 
 | File | Description |
 |------|-------------|
-| `file_sorter.py` | **File Sorter** — scan a folder recursively for FITS files and browse them grouped by `TCSTGT` (target) → `INSTRUME` (instrument). |
+| `file_sorter.py` | **File Sorter** — scan a folder recursively for FITS files and browse them grouped by `TCSTGT` (target) → `INSTRUME` (instrument), with calibration files on their own `<INSTRUMENT> CALIB` tabs. Create AMPA sequences from selected rows. |
 
 ## Install
 
@@ -43,20 +43,27 @@ Plugins → Local Plugin Directories** (e.g.
    (`.fits`, `.fit`, `.fts`, plus `.gz` variants, case-insensitive) is
    scanned in the background with a progress bar and cancel button.
 3. The files are shown in **one tab per instrument** — each tab a
-   table with one row per file:
+   table with one row per file. Calibration files (`IMAGETYP` of
+   `CALIB`, case-insensitive) get their own **`<INSTRUMENT> CALIB`**
+   tab that keeps the instrument's dedicated columns:
 
    ```text
-   [ ALFOSC (23) ] [ CCD1 (7) ] [ (no INSTRUME) ] [ (unreadable) ]
-    File     TCSTGT  GROUPID  BLOCKID  SEQID  OBJECT  IMAGETYP  FILTER  OBS_MODE  EXPTIME  DATE-OBS       FAFLTNM  FBFLTNM  ALGRNM
-    a.fits   M 31    G-7      BLK-1    SEQ-9  M31     —         —       Imaging   300      2026-09-21 …   B_V      Empty    Grism#4
+   [ ALFOSC (12) ] [ ALFOSC CALIB (11) ] [ FIES (3) ] [ (no INSTRUME) ] [ (unreadable) ]
+    File     TARGET  GROUPID  BLOCKID  SEQID  OBJECT  IMAGETYPE  OBSMODE  EXPTIME  DATE-OBS       FASU A   FASU B   GRISM
+    a.fits   M 31    G-7      BLK-1    SEQ-9  M31     —          Imaging  300      2026-09-21 …   B_V      Empty    Grism#4
    ```
 
-   - Common columns on every tab: `File`, `TCSTGT`, `GROUPID`,
-     `BLOCKID`, `SEQID`, `OBJECT`, `IMAGETYP`, `FILTER`, `OBS_MODE`,
-     `EXPTIME`, `DATE-OBS`; missing values show `—`.
+   - Common columns on every tab: `File`, `TARGET`, `GROUPID`,
+     `BLOCKID`, `SEQID`, `OBJECT`, `IMAGETYPE`, `OBSMODE`, `EXPTIME`,
+     `DATE-OBS`; missing values show `—`. Column headers use
+     friendlier labels than the raw FITS keywords where a mapping
+     exists (`TCSTGT` → `TARGET`, `IMAGETYP` → `IMAGETYPE`,
+     `OBS_MODE` → `OBSMODE`, `FAFLTNM` → `FASU A`, `FBFLTNM` →
+     `FASU B`, `ALGRNM` → `GRISM`, `FIFMSKNM` → `FIBER`); there is no
+     `FILTER` column.
    - Instruments with a dedicated view get extra columns — currently
-     **ALFOSC** (`FAFLTNM`, `FBFLTNM`, `ALGRNM`); more (e.g. FIES)
-     can be added to the registry in `file_sorter.py`.
+     **ALFOSC** (`FASU A`, `FASU B`, `GRISM`) and **FIES** (`FIBER`);
+     more can be added to the registry in `file_sorter.py`.
    - Instrument names are normalised (raw `ALFOSC_FASU` groups under
      **ALFOSC**).
    - Files missing `INSTRUME` land on a `(no INSTRUME)` tab; corrupt or
@@ -75,7 +82,14 @@ Plugins → Local Plugin Directories** (e.g.
 4. **Double-click a row** (or select it and press **Load Selected**)
    to open the file in the AMPA viewer. Unreadable files ask for
    confirmation first.
-5. **Rescan** re-runs the scan (the folder is remembered between
+5. **Make a sequence from a range of rows**: select rows with a click,
+   shift-click (range) or ctrl-click (cherry-pick), then press **New
+   Sequence…** (or right-click the selection). You are asked for a
+   name, and a **session-only** AMPA sequence is created from the
+   selected files in the tab's current sort order. It lives in memory
+   only — save it from the Sequence Manager if you want to keep it
+   after quitting AMPA.
+6. **Rescan** re-runs the scan (the folder is remembered between
    sessions and scanned automatically when the plugin window opens).
 
 The scan runs as a cancellable background task, so even huge data
