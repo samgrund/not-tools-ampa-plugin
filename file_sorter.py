@@ -5,9 +5,9 @@ them in one tab per instrument (the ``INSTRUME`` header, normalised via
 aliases - e.g. raw ``ALFOSC_FASU`` groups under **ALFOSC**). Files that
 are not science observations (``IMAGECAT`` other than ``SCIENCE``) or
 that carry no target (``TCSTGT``) get their own ``<INSTRUMENT> CALIB``
-tab. Each
-tab is a table with one row per file: common columns (``TARGET``,
-``OBJECT``, ``IMAGETYPE``, ``OBSMODE``, ``EXPTIME``, ``DATE-OBS``) plus
+tab. Each tab is a table with one row per file: common columns
+(``TARGET``, ``OBJECT``, ``IMAGETYPE``, ``OBSMODE``, ``EXPTIME``,
+``DATE-OBS``, ``TELALT`` (1 decimal), ``AIRMASS`` (2 decimals)) plus
 the instrument's dedicated configuration columns (ALFOSC: ``FASU A``,
 ``FASU B``, ``GRISM``; FIES: ``FIBER``). Column headers use friendlier
 labels than the raw FITS keywords where a mapping exists (see
@@ -92,7 +92,8 @@ _KEY_LABELS = {
 # observation-mode keys.
 _COMMON_HEADER_KEYS = ("GROUPID", "BLOCKID", "SEQID",
                         "OBJECT", "IMAGETYP",
-                        "OBS_MODE", "EXPTIME", "DATE-OBS")
+                        "OBS_MODE", "EXPTIME", "DATE-OBS",
+                        "TELALT", "AIRMASS")
 
 
 # ======================================================================
@@ -236,12 +237,38 @@ def format_date_obs(value) -> str:
     return text
 
 
+def _format_number(value, decimals: int) -> str:
+    """Numeric cell text rounded to *decimals*; ``_MISSING`` when absent.
+
+    Non-numeric values pass through as trimmed text.
+    """
+    if value in (None, ""):
+        return _MISSING
+    try:
+        num = float(value)
+    except (TypeError, ValueError):
+        return str(value).strip() or _MISSING
+    return f"{num:.{decimals}f}"
+
+
+def format_airmass(value) -> str:
+    """AIRMASS cell text: number rounded to 2 decimals."""
+    return _format_number(value, 2)
+
+
+def format_telalt(value) -> str:
+    """TELALT cell text: number rounded to 1 decimal."""
+    return _format_number(value, 1)
+
+
 # Dedicated formatters per header key (everything else falls back to
 # format_value()).
 _KEY_FORMATTERS = {
     "OBS_MODE": format_value,
     "EXPTIME": format_exptime,
     "DATE-OBS": format_date_obs,
+    "TELALT": format_telalt,
+    "AIRMASS": format_airmass,
 }
 
 # Row-background hues cycled through per GROUPID within a tab so

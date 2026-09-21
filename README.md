@@ -50,13 +50,14 @@ Plugins → Local Plugin Directories** (e.g.
 
    ```text
    [ ALFOSC (12) ] [ ALFOSC CALIB (11) ] [ FIES (3) ] [ (no INSTRUME) ] [ (unreadable) ]
-    File     TARGET  GROUPID  BLOCKID  SEQID  OBJECT  IMAGETYPE  OBSMODE  EXPTIME  DATE-OBS       FASU A   FASU B   GRISM
-    a.fits   M 31    G-7      BLK-1    SEQ-9  M31     —          Imaging  300      2026-09-21 …   B_V      Empty    Grism#4
+    File     TARGET  GROUPID  BLOCKID  SEQID  OBJECT  IMAGETYPE  OBSMODE  EXPTIME  DATE-OBS       TELALT  AIRMASS  FASU A   FASU B   GRISM
+    a.fits   M 31    G-7      BLK-1    SEQ-9  M31     —          Imaging  300      2026-09-21 …   77.9    1.02     B_V      Empty    Grism#4
    ```
 
    - Common columns on every tab: `File`, `TARGET`, `GROUPID`,
      `BLOCKID`, `SEQID`, `OBJECT`, `IMAGETYPE`, `OBSMODE`, `EXPTIME`,
-     `DATE-OBS`; missing values show `—`. Column headers use
+     `DATE-OBS`, `TELALT` (rounded to 1 decimal), `AIRMASS` (rounded
+     to 2 decimals); missing values show `—`. Column headers use
      friendlier labels than the raw FITS keywords where a mapping
      exists (`TCSTGT` → `TARGET`, `IMAGETYP` → `IMAGETYPE`,
      `OBS_MODE` → `OBSMODE`, `FAFLTNM` → `FASU A`, `FBFLTNM` →
