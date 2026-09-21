@@ -2,8 +2,10 @@
 
 Recursively scans a user-selected folder for FITS files and presents
 them in one tab per instrument (the ``INSTRUME`` header, normalised via
-aliases - e.g. raw ``ALFOSC_FASU`` groups under **ALFOSC**). Files whose
-``IMAGETYP`` is ``CALIB`` get their own ``<INSTRUMENT> CALIB`` tab. Each
+aliases - e.g. raw ``ALFOSC_FASU`` groups under **ALFOSC**). Files that
+are not science observations (``IMAGETYP`` other than ``SCIENCE``) or
+that carry no target (``TCSTGT``) get their own ``<INSTRUMENT> CALIB``
+tab. Each
 tab is a table with one row per file: common columns (``TARGET``,
 ``OBJECT``, ``IMAGETYPE``, ``OBSMODE``, ``EXPTIME``, ``DATE-OBS``) plus
 the instrument's dedicated configuration columns (ALFOSC: ``FASU A``,
@@ -142,8 +144,10 @@ def scan_folder(root: str, handle=None) -> Dict[str, Any]:
     ``None`` for unreadable files, with ``error`` carrying the reason).
     ``instrume`` carries the display name (alias-normalised, see
     ``_INSTRUMENT_ALIASES``) used for grouping; ``instrume_raw`` the
-    original header value. ``is_calib`` flags files whose ``IMAGETYP``
-    is exactly ``CALIB`` (case-insensitive).
+    original header value. ``is_calib`` flags non-science files
+    (``IMAGETYP`` other than ``SCIENCE``, case-insensitive) and files
+    without a ``TCSTGT`` — both are shown on a ``<INSTRUMENT> CALIB``
+    tab.
     """
     files = find_fits_files(root)
     total = len(files)
@@ -172,13 +176,13 @@ def scan_folder(root: str, handle=None) -> Dict[str, Any]:
             })
             continue
         display = _INSTRUMENT_ALIASES.get(instrume.upper(), instrume)
-        imagetyp = str(header.get("IMAGETYP", "") or "").strip()
+        imagetyp = str(header.get("IMAGETYP", "") or "").strip().upper()
         records.append({
             "path": path,
             "tcstgt": tcstgt or _NO_TARGET,
             "instrume": display or _NO_INSTRUMENT,
             "instrume_raw": instrume,
-            "is_calib": imagetyp.upper() == "CALIB",
+            "is_calib": imagetyp != "SCIENCE" or not tcstgt,
             "header": header,
             "error": None,
         })
@@ -190,8 +194,9 @@ def group_by_instrument(records: List[Dict[str, Any]]
     """Group scan records into ``{tab name: [record, ...]}``.
 
     The order within each group follows the (already deterministic)
-    record order. Calibration files (``is_calib``) are separated into a
-    ``<INSTRUMENT> CALIB`` tab instead of the plain instrument tab.
+    record order. Non-science or targetless files (``is_calib``) are
+    separated into a ``<INSTRUMENT> CALIB`` tab instead of the plain
+    instrument tab.
     """
     groups: Dict[str, List[Dict[str, Any]]] = {}
     for record in records:

@@ -3,16 +3,16 @@
         {
             "id": "file-sorter",
             "name": "File Sorter",
-            "version": "0.6.0",
-            "description": "Recursively scans a folder for FITS files and groups them in tabs by instrument, with calibration files (IMAGETYP CALIB) on their own per-instrument CALIB tabs. Friendlier column labels (TARGET, IMAGETYPE, OBSMODE, FASU A/B, GRISM, FIBER). Select a range of rows to create a session-only AMPA sequence. Double-click a file to load it into the AMPA viewer.",
+            "version": "0.6.1",
+            "description": "Recursively scans a folder for FITS files and groups them in tabs by instrument. Non-science files (IMAGETYP other than SCIENCE) and files without a TCSTGT target go to their own per-instrument CALIB tabs. Friendlier column labels (TARGET, IMAGETYPE, OBSMODE, FASU A/B, GRISM, FIBER). Select a range of rows to create a session-only AMPA sequence. Double-click a file to load it into the AMPA viewer.",
             "author": "samgrund",
             "category": "Plugins",
             "section": "NOT Toolkit",
             "min_app_version": "0.6.0",
             "download_url": "https://github.com/samgrund/not-tools-ampa-plugin/raw/main/file_sorter.py",
-            "checksum": "sha256:2e417e293b903171ce3b3349435e932c9dcd095e607d5fdddd128b7f4cf2e586",
+            "checksum": "sha256:d68622186f4e28d95016c913f5d6ef5d4ab5135695bb8df94557e5a71472b672",
             "homepage": "https://github.com/samgrund/not-tools-ampa-plugin",
-            "download_size": 28774,
+            "download_size": 28984,
             "entry_class": "FileSorterPlugin"
         }
     ]

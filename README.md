@@ -9,7 +9,7 @@ one-click installation via AMPA's Plugin Browser.
 
 | File | Description |
 |------|-------------|
-| `file_sorter.py` | **File Sorter** — scan a folder recursively for FITS files and browse them grouped by `TCSTGT` (target) → `INSTRUME` (instrument), with calibration files on their own `<INSTRUMENT> CALIB` tabs. Create AMPA sequences from selected rows. |
+| `file_sorter.py` | **File Sorter** — scan a folder recursively for FITS files and browse them grouped by `TCSTGT` (target) → `INSTRUME` (instrument), with non-science and targetless files on their own `<INSTRUMENT> CALIB` tabs. Create AMPA sequences from selected rows. |
 
 ## Install
 
@@ -43,9 +43,10 @@ Plugins → Local Plugin Directories** (e.g.
    (`.fits`, `.fit`, `.fts`, plus `.gz` variants, case-insensitive) is
    scanned in the background with a progress bar and cancel button.
 3. The files are shown in **one tab per instrument** — each tab a
-   table with one row per file. Calibration files (`IMAGETYP` of
-   `CALIB`, case-insensitive) get their own **`<INSTRUMENT> CALIB`**
-   tab that keeps the instrument's dedicated columns:
+   table with one row per file. Non-science files (`IMAGETYP` other
+   than `SCIENCE`, case-insensitive) and files without a `TCSTGT`
+   target get their own **`<INSTRUMENT> CALIB`** tab that keeps the
+   instrument's dedicated columns:
 
    ```text
    [ ALFOSC (12) ] [ ALFOSC CALIB (11) ] [ FIES (3) ] [ (no INSTRUME) ] [ (unreadable) ]
