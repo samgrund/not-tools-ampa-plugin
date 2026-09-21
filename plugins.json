@@ -1,0 +1,19 @@
+{
+    "plugins": [
+        {
+            "id": "fits-tree-browser",
+            "name": "FITS Tree Browser",
+            "version": "0.1.0",
+            "description": "Recursively scans a folder for FITS files and groups them in a tree by the TCSTGT (target) and INSTRUME (instrument) headers. Select a file to inspect its headers; load it straight into the AMPA viewer.",
+            "author": "samgrund",
+            "category": "Plugins",
+            "section": "File Browsing",
+            "min_app_version": "0.6.0",
+            "download_url": "https://github.com/samgrund/not-tools-ampa-plugin/raw/main/fits_tree.py",
+            "checksum": "sha256:3687ce4daef0e1f96b1a63b398e0874e84b95061390009dd284103ed43fce7cc",
+            "homepage": "https://github.com/samgrund/not-tools-ampa-plugin",
+            "download_size": 15766,
+            "entry_class": "FitsTreeBrowserPlugin"
+        }
+    ]
+}
