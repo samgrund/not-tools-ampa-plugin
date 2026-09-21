@@ -3,7 +3,7 @@
 Recursively scans a user-selected folder for FITS files and presents
 them in one tab per instrument (the ``INSTRUME`` header, normalised via
 aliases - e.g. raw ``ALFOSC_FASU`` groups under **ALFOSC**). Files that
-are not science observations (``IMAGETYP`` other than ``SCIENCE``) or
+are not science observations (``IMAGECAT`` other than ``SCIENCE``) or
 that carry no target (``TCSTGT``) get their own ``<INSTRUMENT> CALIB``
 tab. Each
 tab is a table with one row per file: common columns (``TARGET``,
@@ -145,7 +145,7 @@ def scan_folder(root: str, handle=None) -> Dict[str, Any]:
     ``instrume`` carries the display name (alias-normalised, see
     ``_INSTRUMENT_ALIASES``) used for grouping; ``instrume_raw`` the
     original header value. ``is_calib`` flags non-science files
-    (``IMAGETYP`` other than ``SCIENCE``, case-insensitive) and files
+    (``IMAGECAT`` other than ``SCIENCE``, case-insensitive) and files
     without a ``TCSTGT`` — both are shown on a ``<INSTRUMENT> CALIB``
     tab.
     """
@@ -176,13 +176,13 @@ def scan_folder(root: str, handle=None) -> Dict[str, Any]:
             })
             continue
         display = _INSTRUMENT_ALIASES.get(instrume.upper(), instrume)
-        imagetyp = str(header.get("IMAGETYP", "") or "").strip().upper()
+        imagecat = str(header.get("IMAGECAT", "") or "").strip().upper()
         records.append({
             "path": path,
             "tcstgt": tcstgt or _NO_TARGET,
             "instrume": display or _NO_INSTRUMENT,
             "instrume_raw": instrume,
-            "is_calib": imagetyp != "SCIENCE" or not tcstgt,
+            "is_calib": imagecat != "SCIENCE" or not tcstgt,
             "header": header,
             "error": None,
         })
