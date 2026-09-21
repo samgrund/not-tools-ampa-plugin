@@ -210,19 +210,29 @@ _KEY_FORMATTERS = {
     "DATE-OBS": format_date_obs,
 }
 
-# Soft pastel row backgrounds, cycled through per GROUPID within a tab so
-# adjacent groups are easy to tell apart. Light enough to keep text
-# readable over them.
-_GROUP_PALETTE = (
-    QtGui.QColor(227, 238, 255),   # soft blue
-    QtGui.QColor(227, 255, 236),   # soft green
-    QtGui.QColor(255, 244, 214),   # soft amber
-    QtGui.QColor(255, 228, 240),   # soft rose
-    QtGui.QColor(224, 248, 250),   # soft cyan
-    QtGui.QColor(240, 230, 255),   # soft lavender
-    QtGui.QColor(255, 236, 224),   # soft peach
-    QtGui.QColor(236, 248, 224),   # soft lime
-)
+# Row-background hues cycled through per GROUPID within a tab so
+# adjacent groups are easy to tell apart. The saturation/lightness are
+# derived from the current application palette at call time (see
+# :func:`group_palette`): dark themes get deep muted shades that keep
+# light text readable, light themes get soft pastels.
+_GROUP_HUES = (210, 130, 55, 0, 25, 170, 265, 315)
+
+
+def group_palette() -> List[QtGui.QColor]:
+    """Shading colors adapted to the active AMPA color theme.
+
+    Returns one color per entry of ``_GROUP_HUES``: muted dark tints
+    when the application palette is dark (so light text stays
+    readable) and soft pastels when it is light.
+    """
+    app = QtWidgets.QApplication.instance()
+    base = (app.palette() if app is not None else QtGui.QPalette()).color(
+        QtGui.QPalette.ColorRole.Window)
+    dark = base.lightness() < 128
+    saturation = 110
+    lightness = 95 if dark else 235
+    return [QtGui.QColor.fromHsl(hue, saturation, lightness)
+            for hue in _GROUP_HUES]
 
 
 def format_key(header, key: str) -> str:
@@ -275,12 +285,13 @@ def assign_group_colors(records: List[Dict[str, Any]]) -> Dict[str, Any]:
     shading.
     """
     colors: Dict[str, Any] = {}
+    palette = group_palette()
     assigned = 0
     for record in records:
         gid = group_id_value(record)
         if not gid or gid in colors:
             continue
-        colors[gid] = _GROUP_PALETTE[assigned % len(_GROUP_PALETTE)]
+        colors[gid] = palette[assigned % len(palette)]
         assigned += 1
     colors[""] = None
     return colors
@@ -495,10 +506,15 @@ class FileSorterPlugin(BaseModule):
             QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers)
         table.setAlternatingRowColors(True)
         header_view = table.horizontalHeader()
+        # Every column sizes to its content so long filenames are never
+        # cut off; when the window is narrower than the table a horizontal
+        # scrollbar appears instead of squeezing columns. The last column
+        # stretches to absorb any spare window width.
         header_view.setSectionResizeMode(
             QtWidgets.QHeaderView.ResizeMode.ResizeToContents)
         header_view.setSectionResizeMode(
-            0, QtWidgets.QHeaderView.ResizeMode.Stretch)
+            headers.index("DATE-OBS"),
+            QtWidgets.QHeaderView.ResizeMode.Stretch)
 
         ordered = sorted(records, key=lambda r: r["path"].lower())
         group_colors = assign_group_colors(ordered)

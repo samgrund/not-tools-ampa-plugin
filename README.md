@@ -64,10 +64,14 @@ Plugins → Local Plugin Directories** (e.g.
      nothing disappears from the listing.
    - Click any column header to sort (`EXPTIME` sorts numerically);
      row tooltips show the absolute file path.
-   - Rows are **shaded by `GROUPID`** — each group gets a soft pastel
-     colour (cycled per tab so adjacent groups always differ; rows
-     without a `GROUPID` stay unshaded). Grouped tabs drop the
-     alternating-row stripes in favour of the shading.
+   - Rows are **shaded by `GROUPID`** — each group gets a soft tint
+     (cycled per tab so adjacent groups always differ; rows without a
+     `GROUPID` stay unshaded). The tints follow the AMPA color theme:
+     muted dark shades in dark mode, pastels in light mode. Grouped
+     tabs drop the alternating-row stripes in favour of the shading.
+   - Columns are sized to their content — filenames are never cut
+     off; if the window is narrower than the table a horizontal
+     scrollbar appears.
 4. **Double-click a row** (or select it and press **Load Selected**)
    to open the file in the AMPA viewer. Unreadable files ask for
    confirmation first.
