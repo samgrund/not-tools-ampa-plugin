@@ -14,6 +14,21 @@
             "homepage": "https://github.com/samgrund/not-tools-ampa-plugin",
             "download_size": 32301,
             "entry_class": "FileSorterPlugin"
+        },
+        {
+            "id": "fies-spectrum-viewer",
+            "name": "FIES Spectrum Viewer",
+            "version": "0.1.0",
+            "description": "Plots 1-D merged FIES echelle spectra (FIEStool products) with the wavelength axis calibrated from the FITS header (CRVAL1/CDELT1/CRPIX1, air Angstroms), trimming the noisy first and last 2% of the wavelength range. Shows OBJECT, fiber, exposure, VHELIO and airmass. The spectrum curve line width is user-adjustable (persisted). A checkbox overlays telluric absorption lines, colour-coded by absorber (O2 red, H2O blue) with a user-adjustable, persisted line width; hovering identifies each line (air/vacuum wavelength, molecule and band, indicative depth) and an optional Labels mode annotates the strongest features. The line table is derived from the DKIST Telluric Atlas (HITRAN2020/LBLRTM), stored in vacuum wavelengths and converted to air with the Morton (1991) dispersion relation to match the spectrograph scale; regenerate it with tools/generate_telluric_table.py in the repository.",
+            "author": "samgrund",
+            "category": "Plugins",
+            "section": "NOT Toolkit",
+            "min_app_version": "0.6.0",
+            "download_url": "https://github.com/samgrund/not-tools-ampa-plugin/raw/main/fies_spectrum_viewer.py",
+            "checksum": "sha256:808d049bacbdea3123d2c8df058eecf534e93bd1b81ab8a6a3a78b372f8ebcb2",
+            "homepage": "https://github.com/samgrund/not-tools-ampa-plugin",
+            "download_size": 43951,
+            "entry_class": "FiesSpectrumViewerPlugin"
         }
     ]
 }
